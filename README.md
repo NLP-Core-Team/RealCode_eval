@@ -169,6 +169,9 @@ CUDA_VISIBLE_DEVICES=0 python main.py \
 
 See ```config/config.yaml``` for other options
 
+# Results of evaluations
+Coming soon...
+
 # Notes
 * Around 60% of the used repositories are related to the field of AI/LLMs/ML. We did not perform any specific topic-based filtering, it comes from the topic distribution of the github python repositories in summer 2023
 * The code in RealCode repositories was not be seen during pretraining of starcoder or codellama as these models were trained before the summer 2023. Deepseek-coder may have seen this code in pretraining.
@@ -176,9 +179,7 @@ See ```config/config.yaml``` for other options
 * Not all the tests are passed in the repositories. We consider a generation to be correct if it passes the same number of tests, as the ground truth body of a function
 * We use ```device_map='auto'```, if you wish to use specific GPUs set ```CUDA_VISIBLE_DEVICES```, as in the examples
 
-## We thank the authors of the repositories used in RealCode
-If you find RealCode_eval useful please consider giving a star to the repositories we used:
-
+If you find RealCode_eval useful please consider giving a star to the repositories used for evaluation: \
 https://github.com/Jakob-98/openai-functools \
 https://github.com/biobootloader/mentat \
 https://github.com/causalens/cai-causal-graph \
