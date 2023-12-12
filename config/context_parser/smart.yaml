@@ -1,0 +1,6 @@
+# @package _global_
+
+context_parser:
+  _target_: lm_eval.context_parser.SmartContextParser
+  left_config: ['imports', 'outer', 'inner']
+  right_config: ['outer']

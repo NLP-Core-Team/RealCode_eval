@@ -1,0 +1,19 @@
+# @package _global_
+
+# number of parameters in the model. For codellama it is 7b, 13b or 34b
+size: "7b"
+# name of the model on HuggingFace
+model_path: 'codellama/CodeLlama-${size}-hf'
+model_short_name: "codellama-${size}"
+# codellama special tokens
+lm_prefix_tokens: "<s>"
+prefix_tokens: "<s><PRE>"
+middle_tokens:  "<SUF>"
+suffix_tokens:  "<MID>"
+# context truncation length
+max_context_length: 15500
+eos_sequences: ["\\sclass\\s", "\\sdef\\s", "^def\\s", "^class\\s", "@", "<EOT>"]
+tokenizer_fix: 1
+
+model_kwargs:
+  use_flash_attention_2: True

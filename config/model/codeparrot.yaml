@@ -1,0 +1,16 @@
+# @package _global_
+
+# number of parameters in the model. For codellama it is 7b, 13b or 34b
+size: "110m"
+# name of the model on HuggingFace
+model_path: 'codeparrot/codeparrot-small'
+model_short_name: "codeparrot-small"
+# codellama special tokens
+lm_prefix_tokens: ""
+prefix_tokens: ""
+middle_tokens:  ""
+suffix_tokens:  ""
+# context truncation length
+max_context_length: 512
+# model_kwargs:
+#   use_flash_attention_2: True

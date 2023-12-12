@@ -1,0 +1,9 @@
+# @package _global_
+
+variant: "rbase"
+model_path: 'bigcode/starcode${variant}'
+model_short_name: "starcode${variant}"
+prefix_tokens: "<fim_prefix>"
+middle_tokens: "<fim_suffix>"
+suffix_tokens: "<fim_middle>"
+max_context_length: 7500

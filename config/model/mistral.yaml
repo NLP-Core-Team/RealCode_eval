@@ -1,0 +1,13 @@
+# @package _global_
+
+size: "7B"
+model_path: 'mistralai/Mistral-${size}-v0.1'
+model_short_name: "Mistral-${size}"
+lm_prefix_tokens: ""
+lm_suffix_tokens: ""
+prefix_tokens: ""
+middle_tokens: ""
+suffix_tokens: ""
+max_context_length: 7500
+model_kwargs:
+  use_flash_attention_2: True

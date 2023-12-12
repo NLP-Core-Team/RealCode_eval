@@ -1,0 +1,10 @@
+# @package _global_
+
+model_path: 'microsoft/phi-1'
+model_short_name: "phi1"
+lm_prefix_tokens: ""
+prefix_tokens: "0"
+middle_tokens: "0"
+suffix_tokens: "0"
+eos_sequences: ["\\sclass\\s", "\\sdef\\s", "^def\\s", "^class\\s", "@", "from", "import", "<|endoftext|>"]
+max_context_length: 7500

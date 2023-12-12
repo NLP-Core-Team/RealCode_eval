@@ -1,0 +1,12 @@
+# @package _global_
+
+size: ""
+model_path: '${model_base_path}/${model_short_name}'
+model_base_path: ""
+model_short_name: ""
+lm_prefix_tokens: ""
+lm_suffix_tokens: ""
+prefix_tokens: ""
+middle_tokens: ""
+suffix_tokens: ""
+max_context_length: 1024

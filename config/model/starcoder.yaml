@@ -1,0 +1,11 @@
+# @package _global_
+
+size: "1b"
+model_path: 'bigcode/starcoderbase-${size}'
+model_short_name: "starcoderbase-${size}"
+lm_prefix_tokens: "<fim_prefix>"
+lm_suffix_tokens: "<fim_suffix>\\n\\n<fim_middle>" # weirdly, this works better simple lm
+prefix_tokens: "<fim_prefix>"
+middle_tokens: "<fim_suffix>"
+suffix_tokens: "<fim_middle>"
+max_context_length: 7500
