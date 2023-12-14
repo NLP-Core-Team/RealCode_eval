@@ -99,6 +99,53 @@ The task for a model in **RealCode_eval** is to write the body of a function tha
 
 Every repository in RealCode has dependencies and, as a result, necessitates properly configured environments. We utilize Conda to create distinct environments for each repository.
 
+
+# Evaluation of public code LMs
+> [!NOTE]
+> These results were obtained on the pre-release version of the dataset, which contained two more functions (221 instead of 219)
+
+## LM mode, left context only, 1024 tokens
+| +model    | size    |   Pass@1 |
+|:----------|:--------|---------:|
+| starcoder | 1b      | 0.3873  |
+| starcoder | 7b      | 0.4814 |
+| codellama | 7b      | 0.4760 |
+| codellama | 13b     | 0.4841 |
+| codellama | 34b     | 0.4932 |
+| phi1      | 1b      | 0.3529 |
+| mistral   | 7b     | 0.4208 |
+| deepseek-coder  | 1.3b    | 0.4144  |
+| deepseek-coder  | 5.7bmqa | 0.4669 |
+| deepseek-coder  | 6.7b    | 0.4914 |
+| deepseek-coder  | 33b     | 0.4932 |
+
+## Infill mode, 512 tokens left context, 512 tokens right context
+| +model       | size         |   Pass@1 |
+|:-------------|:-------------|---------:|
+| codellama    | 7b           | 0.4941 |
+| codellama    | 13b          | 0.5339 |
+| deepseek-coder     | 1.3b         | 0.3113 |
+| deepseek-coder     | 5.7bmqa      | 0.5330 |
+| deepseek-coder     | 6.7b         | 0.4832 |
+| deepseek-coder     | 33b          | 0.5484 |
+| starcoder    | 1b           | 0.4506 |
+| starcoder    | 7b           | 0.5149 |
+| starcoder    | 15b | 0.5248 |
+
+> [!NOTE]
+> If an "oracle" takes max Pass@1 for each function from the configurations presented in LM and Infill tables, he would score Pass@1=0.7085
+## Repository-level mode\*, 15k tokens in context, 13.5k in left context for infill
+| model    | generator_mode   |   size |   Pass@1 |
+|:---------|:-----------------|:-------|---------:|
+| deepseek | lm               |      1.3b | 0.5438 | 
+| deepseek | lm               |      5.7bmqa | 0.5601 |
+| deepseek | infill           |      5.7bmqa | 0.5891 |
+| deepseek | lm               |      6.7b | 0.5954 |
+| deepseek | infill           |      6.7b | 0.5809 |
+
+\* both the files imported by current file and the files that import current file are added to the left context
+
+
 # Getting started
 Prerequisites:
 * Linux
@@ -168,9 +215,6 @@ CUDA_VISIBLE_DEVICES=0 python main.py \
 ```
 
 See ```config/config.yaml``` for other options
-
-# Results of evaluations
-Coming soon...
 
 # Notes
 * Around 60% of the used repositories are related to the field of AI/LLMs/ML. We did not perform any specific topic-based filtering, it comes from the topic distribution of the github python repositories in summer 2023
