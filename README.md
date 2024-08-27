@@ -149,7 +149,6 @@ Every repository in RealCode has dependencies and, as a result, necessitates pro
 # Getting started
 Prerequisites:
 * Linux
-* more than 800k free inodes on your drive (check with ```df -hi```)
 * Conda 
 
 1. Install requirements in your main environment
@@ -157,22 +156,27 @@ Prerequisites:
 pip install -r requirements.txt
 ```
 
-1. Clone repositories and build environments (takes about an hour)
+2. Download repositories and dataset
 ```bash
+wget https://zenodo.org/records/13378983/files/realcode_v3_repos_upd.tar.gz
+tar -xvf ../RealCode_eval/realcode_v3_repos_upd.tar.gz -C data
+```
+3. Build conda environments for each repository
+```
 cd prepare_data
 python run.py
 cd ..
 ```
 
-2. Check installation
+4. Check installation
 ```bash
-pytest tests/test_evaluator.py
+pytest tests
 ```
 
 > [!NOTE]
 > Number of passed tests in the repositories may vary depending on your system. If this test fails on your system feel free to open an issue. We need your feedback to create a more stable version of the benchmark.
 
-3. Run the evaluation of your model (see **config/config.yaml** for details). E.g. for [codeparrot-small](https://huggingface.co/codeparrot/codeparrot-small) (Pass@1 should be 0.16):
+5. Run the evaluation of your model (see **config/config.yaml** for details). E.g. for [codeparrot-small](https://huggingface.co/codeparrot/codeparrot-small) (Pass@1 should be 0.16):
 ```bash
 CUDA_VISIBLE_DEVICES=0 python main.py +model=codeparrot generation_params.max_new_tokens=512 max_context_length=500
 ```
@@ -180,7 +184,7 @@ CUDA_VISIBLE_DEVICES=0 python main.py +model=codeparrot generation_params.max_ne
 > [!WARNING]
 > **Generated code is executed without any isolation! Use at your own risk!**
 
-4. The evaluation results will be saved at ```./results/```
+6. The evaluation results will be saved at ```./results/```
 
 # Examples
 

@@ -5,93 +5,76 @@ import shutil
 import subprocess
 from pathlib import Path
 from tqdm import tqdm
+from joblib import Parallel, delayed
 
 os.environ['GIT_PYTHON_TRACE'] = 'full'
 
-def clone_repos(target_dir):
-    df = pd.read_csv('./repositories.csv')
-    os.makedirs(target_dir, exist_ok=True)
-    for _, row in tqdm(df.iterrows(), 'Cloning repositories', total=df.shape[0]):
-        if not os.path.exists(os.path.join(target_dir, row["name"])):
-            repo = Repo.clone_from(row['url'], os.path.join(target_dir, row["name"]))
-            repo.head.reset(row["commit"], index=True, working_tree=True)
-        else:
-            raise ValueError(f"Directory {os.path.join(target_dir, row['name'])} not empty")
-    shutil.copy("./dataset.json", os.path.join(target_dir, 'dataset.json'))
 
-
-def run(cmd):
+def run(cmd, check=False):
     return subprocess.run(
         [cmd.replace('\n', ' ')], 
-        shell=True, capture_output=True, check=False
+        shell=True, capture_output=True, check=check,
     ).stdout.decode("utf-8")
 
-
-# def setup(repo):
-#     base_path = str(repo.resolve())
-#     print(base_path)
-#     if 'tests' not in os.listdir(base_path):
-#         out = run(f"rm -rf {base_path}")
-#         return None
-        
-#     run(f"rm -rf {base_path}/venv_bench")
-#     run(f"rm -rf {base_path}/build")
-#     d = run(f"./base_env/bin/python3 -m venv --copies {base_path}/venv_bench")
-
-    
-#     if os.path.exists(f"{base_path}/poetry.lock"):
-#         out = run(f"cd {base_path} && ./base_env/bin/poetry export -o reqs_p.txt --without-hashes")
-#         out = run(f"cd {base_path} && ./base_env/bin/poetry export --with dev -o reqs_p.txt --without-hashes")
-#         out = run(f"cd {base_path} && ./base_env/bin/poetry export --with test -o reqs_p.txt --without-hashes")
-
-#     for req_filename in ["reqs_p.txt", "requirements.txt", "linux_requirements.txt",
-#          "requirements-ci.txt","requirements_ci.txt", "dev-requirements.txt",
-#          'requirements_dev.txt', "requirements-dev.txt"]:
-#         if os.path.exists(f"{base_path}/{req_filename}"):
-#             out = run(f"{repo}/venv_bench/bin/python -m pip install -r {base_path}/{req_filename}")
-#     out = run(f"{repo}/venv_bench/bin/python -m pip install -e {base_path}")
-#     for toml_option in ["[test]", "[dev]", "[all]"]:
-#         out = run(f"{repo}/venv_bench/bin/python -m pip install -e {base_path}.{toml_option}")
-#     out = run(f"{repo}/venv_bench/bin/python -m pip install pytest")
-#     return f"{repo}/venv_bench/bin/python"
-
+def delete_and_report(path):
+    if os.path.exists(path):
+        shutil.rmtree(path, ignore_errors=False)
+        if os.path.exists(path):
+            raise ValueError(f"Unable to delete {path}, please delete it manually")
 
 def setup(repo):
     """
     builds conda environments in repo, that will be used to run tests
     """
-    base_path = str(repo.resolve())
-    run(f"rm -rf {base_path}/venv_bench")
-    d = run(f"conda create -p {base_path}/venv_bench -y python=3.11 poetry")  
+    base_path = str(repo.resolve().absolute())
+    delete_and_report(f"{base_path}/venv_bench")
+    delete_and_report(f"{base_path}/build")
+    delete_and_report(f"{base_path}/*.egg-info")
+    try:
+        d = run(f"conda create -p {base_path}/venv_bench --copy -y python=3.11 poetry", check=True)      
+    except subprocess.CalledProcessError as e:
+        print(repo, 'create')
+        print(e.stdout)
+        print(e.stderr)
+        raise e
     if os.path.exists(f"{base_path}/poetry.lock"):
+        run(f"rm {base_path}/reqs_p.txt")
         out = run(f"cd {base_path} && conda run -p {base_path}/venv_bench poetry export -o reqs_p.txt --without-hashes")
         out = run(f"cd {base_path} && conda run -p {base_path}/venv_bench poetry export --with dev -o reqs_p.txt --without-hashes")
         out = run(f"cd {base_path} && conda run -p {base_path}/venv_bench poetry export --with test -o reqs_p.txt --without-hashes")
+    
     for req_filename in ["reqs_p.txt", "requirements.txt", "linux_requirements.txt",
-         "requirements-ci.txt","requirements_ci.txt", "dev-requirements.txt",
-         'requirements_dev.txt', "requirements-dev.txt"]:
+        "requirements-ci.txt","requirements_ci.txt", "dev-requirements.txt",
+        'requirements_dev.txt', "requirements-dev.txt"]:
         if os.path.exists(f"{base_path}/{req_filename}"):
-            out = run(f"conda run -p {base_path}/venv_bench python -m pip install -r {base_path}/{req_filename}")
-    out = run(f"conda run -p {base_path}/venv_bench python -m pip install -e {base_path}")
-    for toml_option in ["[test]", "[dev]", "[all]"]:
+            out = run(f"conda run -p {base_path}/venv_bench python -m pip install -r {base_path}/{req_filename}", check=True)
+    skip_install = False
+    try: 
+        if not skip_install and (os.path.exists(f"{base_path}/setup.py") or os.path.exists(f"{base_path}/pyproject.toml")):
+            out = run(f"conda run -p {base_path}/venv_bench python -m pip install {base_path}", check=True)        
+    except subprocess.CalledProcessError as e:
+        print('='*40)
+        print(repo, 'pip install warn')
+        print('='*40)
+    for toml_option in ["[test]", "[dev]", "[all]"]: 
         out = run(f"conda run -p {base_path}/venv_bench python -m pip install {base_path}.{toml_option}")
     out = run(f"conda run -p {base_path}/venv_bench pip install pytest")
+    if not os.path.exists(f"{repo}/venv_bench/bin/python"):
+        raise ValueError(f"{repo}/venv_bench/bin/python not found")
+    print(repo, "done")
     return base_path
 
 
 def build_envs(source_dir):
     repos_parent = Path(source_dir)
-    for path in tqdm([t for t in repos_parent.iterdir() if os.path.isdir(t)], desc='building_envs'):
-        setup(path)
-    # run('rm -rf ./base_env')
+    Parallel(n_jobs=8)(
+        delayed(setup)(path)
+        for path in tqdm([t for t in repos_parent.iterdir() if os.path.isdir(t)], desc='building_envs')
+    )
+
 
 
 if __name__ == '__main__':
-    dataset_dir = '../data/realcode_v1'
-    print(f'Clearing {dataset_dir}')
-    run(f'rm -rf {dataset_dir}')
-    print('Started collecting dataset')
-    clone_repos(dataset_dir)
-    print('All repos are cloned')
+    dataset_dir = '../data/realcode_v3'
     build_envs(dataset_dir)
     print('Done')

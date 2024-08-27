@@ -3,30 +3,36 @@ from typing import List, Dict, Any, Tuple
 from shutil import copytree
 from pathlib import Path
 import json
-import subprocess
+from subprocess import Popen, TimeoutExpired, PIPE, run
+import os
 import re
 import shutil
-from tqdm import tqdm
-# from joblib import Parallel, delayed
-from multiprocessing import Pool
 
 from .datatypes import Task
+CONDA_BIN = '/home/user/conda/bin/conda'
 
-my_env = os.environ.copy()
-my_env["PYTHONDONTWRITEBYTECODE"] = f"nonempty"
-TIMEOUT = 60*7
 
-def run(cmd):
-    res = subprocess.run([cmd.replace('\n', ' ')], shell=True, capture_output=True, check=False, env=my_env, timeout=TIMEOUT)
+TIMEOUT = 30
+
+def get_indent(code):
+    line = code.split('\n')[0]
+    return len(line) - len(line.strip())
+
+def run_wrapper(cmd, cwd):
+    my_env = os.environ.copy()
+    my_env['PATH'] = f"{cwd}:" + my_env['PATH']
+    my_env['PYTHONPATH'] = f"{cwd}"
+    res = run([cmd.replace('\n', ' ')], shell=True, capture_output=True, check=False, env=my_env, timeout=TIMEOUT)
     return res.stdout.decode("utf-8") + res.stderr.decode("utf-8")
+
 
 def run_tests(bin: os.PathLike, repo: os.PathLike) -> Dict[str, int]:
     """
     Execute all tests in the given path using pytest from bin
     """
     try:
-        cmd = run(f"cd {str(repo)} && conda run -p {str(bin)} pytest tests --color=no -p no:cacheprovider")
-    except subprocess.TimeoutExpired:
+        cmd = run_wrapper(f"cd {str(repo)} && conda run -p {str(bin)} pytest tests --color=no -p no:cacheprovider", cwd=str(repo))
+    except TimeoutExpired:
         print('TIMEOUT CAUGHT')
         return {'passed': 0, 'failed': 0,  'output': 'TIMEOUT'}
     passed = re.findall(r" \d+ passed", cmd)
@@ -42,14 +48,14 @@ def run_tests(bin: os.PathLike, repo: os.PathLike) -> Dict[str, int]:
     if cmd.find("short test summary info") != -1:
         out = '\n'.join(cmd.split('\n')[-50:]) # cmd[cmd.find("short test summary info"):]
     else:
-        out = '\n'.join(cmd.split('\n')[-20:])
+        out = '\n'.join(cmd.split('\n')[:])
     return {'passed': passed, 'failed': failed, 'output': out}
             
 def evaluate_override(
         root_path: os.PathLike, task: Task, generation: str, workdir: os.PathLike
 ) -> Dict[str, Any]:
     root_path  = Path(root_path)
-    workdir = Path(workdir)
+    workdir = Path(workdir).absolute()
     if os.path.exists(workdir):
         try:
             shutil.rmtree(workdir)
@@ -80,6 +86,7 @@ def evaluate_override_wrapped(
     root_path: os.PathLike, task: Task, generation: str, workdir: os.PathLike, task_n: int, gen_n: int, cache: dict
 ) -> Tuple[int, int, Dict[str, Any]]:
     cache_key = task.left_context + generation + task.right_context
+    print('\r', task.repo, task.repo_n, cache_key in cache)
     if cache_key in cache:
         return (task_n, gen_n, cache[cache_key])
     else:

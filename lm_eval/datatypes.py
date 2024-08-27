@@ -10,6 +10,6 @@ class Task:
     right_context: str
     gt: str
     total_tests: int
-
+    doc: str = ''
 
 

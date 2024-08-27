@@ -17,7 +17,7 @@ logger = logging.getLogger("RealCode")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def get_num_lines_bin(t: Task):
-    lines = t.gt.count('\n') - 1
+    lines = t.gt.count('\n')
     if 1 <= lines <= 2:
         return '1-2'
     elif 3 <= lines <= 5:
@@ -107,7 +107,11 @@ class Evaluator:
             exact_match = mean([int(re.sub(r'\W+', '', task.gt) == re.sub(r'\W+', '', gen)) for gen in task_generations])
             task_metrics = {'compilation_error_rate': not_compiles, 'exact_match': exact_match}
             for metric in self.metrics:
-                task_metrics[metric.name()] = metric(correct)
+                # If generated exact repository code, Pass@1 is 1
+                if exact_match > 1 - 1e-3:
+                    task_metrics[metric.name()] = 1.0
+                else:
+                    task_metrics[metric.name()] = metric(correct)
             task_metrics['evaluations'] = [t['output'] for t in task_results]
             metrics.append(task_metrics)
             for level, level_func in self.metric_aggregations.items():
