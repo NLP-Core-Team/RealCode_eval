@@ -86,7 +86,6 @@ def evaluate_override_wrapped(
     root_path: os.PathLike, task: Task, generation: str, workdir: os.PathLike, task_n: int, gen_n: int, cache: dict
 ) -> Tuple[int, int, Dict[str, Any]]:
     cache_key = task.left_context + generation + task.right_context
-    print('\r', task.repo, task.repo_n, cache_key in cache)
     if cache_key in cache:
         return (task_n, gen_n, cache[cache_key])
     else:

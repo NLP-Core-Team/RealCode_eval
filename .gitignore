@@ -1,5 +1,6 @@
 test_incorrest_answers_fails.json
 test_perfect_preds_fails.json
+outputs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

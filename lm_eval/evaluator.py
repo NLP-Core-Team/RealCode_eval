@@ -17,7 +17,7 @@ logger = logging.getLogger("RealCode")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 def get_num_lines_bin(t: Task):
-    lines = t.gt.count('\n')
+    lines = t.gt.strip().count('\n') + 1
     if 1 <= lines <= 2:
         return '1-2'
     elif 3 <= lines <= 5:
