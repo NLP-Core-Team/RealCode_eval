@@ -12,11 +12,14 @@ from lm_eval.context_parser import TrivialContextParser
 from lm_eval.utils import load_dataset
 
 from omegaconf import DictConfig, OmegaConf
+from accelerate import Accelerator
+from accelerate.utils import gather_object
+
 
 
 import logging
 logger = logging.getLogger("RealCode")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 def seed_all(seed):
     random.seed(seed)
@@ -28,7 +31,7 @@ def seed_all(seed):
 def main(cfg: DictConfig) -> None:
     seed_all(cfg.seed)
     print(cfg)
-
+    accelerator = Accelerator()
     dataset = load_dataset(cfg.dataset_root, cfg.dataset_meta_file, cfg.limit)
     logger.info(f"loaded {cfg.dataset_root} {cfg.dataset_meta_file}")
     if cfg.do_generation:
@@ -40,7 +43,7 @@ def main(cfg: DictConfig) -> None:
         dtype_map = {'fp16': torch.float16, 'fp32': torch.float, 'bf16': torch.bfloat16}
         if cfg.generator_mode == 'infill':
             generator = InfillGenerator(
-                add_extra_spaces_to_begin=0,
+                accelerator=accelerator,
                 model_path=cfg.model_path,
                 dtype=dtype_map[cfg.dtype],
                 num_samples=cfg.num_samples,
@@ -49,14 +52,13 @@ def main(cfg: DictConfig) -> None:
                 suffix_tokens=cfg.suffix_tokens,
                 max_context_length=cfg.max_context_length,
                 generation_params=dict(cfg.generation_params),
-                eos_sequences=cfg.eos_sequences,
                 model_kwargs=cfg.model_kwargs if 'model_kwargs' in cfg else {},
                 context_parser=parser,
                 left_context_ratio=cfg.left_context_ratio,
-                add_extra_spaces_to_generation=cfg.tokenizer_fix
             )
         elif cfg.generator_mode == 'lm':
             generator = LMGenerator(
+                accelerator=accelerator,
                 model_path=cfg.model_path,
                 dtype=dtype_map[cfg.dtype],
                 num_samples=cfg.num_samples,
@@ -64,25 +66,27 @@ def main(cfg: DictConfig) -> None:
                 lm_suffix_tokens=cfg.lm_suffix_tokens if 'lm_suffix_tokens' in cfg else [],
                 max_context_length=cfg.max_context_length,
                 generation_params=dict(cfg.generation_params),
-                eos_sequences=cfg.eos_sequences,
                 model_kwargs=cfg.model_kwargs if 'model_kwargs' in cfg else {},
                 context_parser=parser,
-                add_extra_spaces_to_generation=cfg.tokenizer_fix
             )
         else:
             raise ValueError(f"generator_mode can be either 'lm' or 'infill', found {cfg.generator_mode}")
         
-        del generator.model # clean up cuda, we don't need it
+
 
         logger.info(f"Starting generation")
-        generations = generator.generate(dataset)
-        with open(cfg.generations_save_path, "w") as f:
-            json.dump(generations, f)
+        with accelerator.split_between_processes(dataset) as part:
+            part_generations = generator.generate(part)
+            generations = gather_object(part_generations)
+        if accelerator.is_main_process:
+            with open(cfg.generations_save_path, "w") as f:
+                json.dump(generations, f)
+        del generator.model
     else:
         with open(cfg.generations_save_path, "r") as f:
             generations = json.load(f)
 
-    if cfg.do_eval:
+    if cfg.do_eval and accelerator.is_main_process:
         evaluator = Evaluator(
             dataset_root=cfg.dataset_root,
             num_samples=cfg.num_samples,

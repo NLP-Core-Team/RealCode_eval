@@ -217,7 +217,10 @@ CUDA_VISIBLE_DEVICES=0 python main.py \
 CUDA_VISIBLE_DEVICES=0 python main.py \
     +model=codellama size=7b,13b generator_mode=lm,infill max_context_length=2048 --multirun
 ```
-
+* Parallel generation across 8 GPUs
+```
+accelerate launch --num-processes 8 main.py +model=starcoder size=3b generator_mode=infill max_context_length=1024
+```
 See ```config/config.yaml``` for other options
 
 # Notes

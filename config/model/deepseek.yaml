@@ -1,8 +1,8 @@
 # @package _global_
 
-size: "6.7b"
+size: "1.3b"
 model_path: 'deepseek-ai/deepseek-coder-${size}-base'
-model_short_name: "deepseek-coder-6.7b"
+model_short_name: "deepseek-coder-1.3b"
 lm_prefix_tokens: ""
 lm_suffix_tokens: ""
 prefix_tokens: "<｜fim▁begin｜>"

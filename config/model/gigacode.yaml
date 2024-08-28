@@ -1,0 +1,13 @@
+# @package _global_
+
+size: "7b"
+model_path: '/home/jovyan/kokosinskiy/models/${model_short_name}'
+model_short_name: ""
+lm_prefix_tokens: ""
+lm_suffix_tokens: ""
+prefix_tokens: <PRE>
+middle_tokens: <SUF>
+suffix_tokens: <MID>
+max_context_length: 3000
+model_kwargs:
+  attn_implementation: flash_attention_2

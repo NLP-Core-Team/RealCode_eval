@@ -11,14 +11,18 @@ from tqdm import tqdm
 
 from .datatypes import Task
 from .context_parser import BaseParser, TrivialContextParser
-
 import logging
 logger = logging.getLogger("RealCode")
 
 
+def get_indent(code):
+    line = [t for t in code.split('\n') if t.strip()][0]
+    return len(line) - len(line.strip())
+
 
 class InfillGenerator:
-    def __init__(self, 
+    def __init__(self,
+        accelerator,
         model_path: str,
         num_samples: int,
         prefix_tokens: tp.Union[str, tp.List[int]] = [],
@@ -27,11 +31,9 @@ class InfillGenerator:
         max_context_length: int = None,
         left_context_ratio: int = 1,
         dtype = torch.bfloat16,
-        eos_sequences: tp.List[str] = ["\sclass\s", "\sdef\s", "\s@", "<|endoftext|>", "<extra_id_0>"],
         model_kwargs: tp.Dict = {},
         generation_params: tp.Dict[str, tp.Any] = {},
         context_parser: BaseParser = TrivialContextParser(),
-        add_extra_spaces_to_generation=0,
     ):
         """
         Class to generate code in fill-in-the-middle mode
@@ -50,15 +52,15 @@ class InfillGenerator:
             context_parser: BaseParser = TrivialContextParser() - parser for left and right contexts
             add_extra_spaces_to_generation=0 - number of added extra spaces add the begining of generation to fix indentation. May be required due to bugs in some tokenizers (e.g. Codellama)
         """
-        self.device = torch.device("cuda")
-        # self.device = torch.device("cpu")
         logger.info(f"Loading model from {model_path} with kwargs f{model_kwargs}")
+        self.device = accelerator.device
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        self.model = AutoModelForCausalLM.from_pretrained(model_path, 
-            torch_dtype=dtype, device_map="auto", trust_remote_code=True, **model_kwargs
-        ).eval() 
+        model = AutoModelForCausalLM.from_pretrained(model_path, 
+            torch_dtype=dtype, trust_remote_code=True, **model_kwargs
+        )
+        self.model = model.to(self.device).eval()
         logger.info(f"Loaded model from {model_path} with kwargs f{model_kwargs}")
-        logger.info(f"Device map: \n{self.model.hf_device_map}")
+        logger.info(f"{self.model}")
 
         self.num_samples = num_samples
         
@@ -67,8 +69,6 @@ class InfillGenerator:
         self.suffix_tokens = self.tokenize_special_tokens(suffix_tokens)
 
         logger.debug(f"prefix_tokens: {self.prefix_tokens}, middle_tokens: {self.middle_tokens}, suffix_tokens: {self.suffix_tokens}")
-
-        self.eos_sequences = eos_sequences[:]
 
         #context truncation parameters
         self.max_context_length = max_context_length
@@ -79,25 +79,20 @@ class InfillGenerator:
         self.generation_params['num_return_sequences'] = self.num_samples
 
         self.context_parser = context_parser
-        # Number of tokens before and after truncating to max_context_length
-        self.count_inferenced_tokens = []
-        self.count_possible_tokens = []
-        self.add_extra_spaces_to_generation = add_extra_spaces_to_generation
 
     def tokenize_special_tokens(self, str_or_list:  tp.Union[str, tp.List[int]]) -> torch.Tensor:        
         if type(str_or_list) == str:
-            return self.tokenizer.encode(str_or_list, return_tensors="pt", add_special_tokens=False).to(self.device) # ['input_ids']
+            return self.tokenizer.encode(str_or_list, return_tensors="pt", add_special_tokens=False) # ['input_ids']
         else:
-            return torch.as_tensor(str_or_list).unsqueeze(0).to(self.device)
+            return torch.as_tensor(str_or_list).unsqueeze(0)
 
     def _prepare_tokens(self, task: Task) -> torch.Tensor:
         left_context_str, right_context_str = self.context_parser.get_left_and_right_context(task)
         logger.info("\n" + "\n".join(left_context_str.split('\n')[-20:]))
         left_tokens = self.tokenizer.encode(
-            left_context_str, return_tensors="pt", add_special_tokens=False).to(self.device) # ['input_ids']
+            left_context_str, return_tensors="pt", add_special_tokens=False, max_length=self.max_context_length)# ['input_ids']
         right_tokens = self.tokenizer.encode(
-            right_context_str, return_tensors="pt", add_special_tokens=False).to(self.device) # ['input_ids']
-        self.count_possible_tokens.append(left_tokens.shape[1] + right_tokens.shape[1])
+            right_context_str, return_tensors="pt", add_special_tokens=False) # ['input_ids']
         if self.max_context_length and left_tokens.shape[1] + right_tokens.shape[1] > self.max_context_length:
             logger.debug("Truncating context")
             
@@ -106,31 +101,27 @@ class InfillGenerator:
         tokens = torch.cat([self.prefix_tokens, left_tokens, self.middle_tokens, right_tokens, self.suffix_tokens], dim=-1).type(torch.long)
         return tokens
     
-    def _postprocess(self, generation: str):
+    def _postprocess(self, generation: str, indent: int):
         new_gen = []
         for i, line in enumerate(generation.split('\n')):
-            if i == 0 and self.add_extra_spaces_to_generation: 
-                # ugly hack for codellama, weirdly removing space for skip_special_tokens=True
-                line = ' '*self.add_extra_spaces_to_generation + line
-            for eos in self.eos_sequences:
-                if re.search(eos, line):
-                    return "\n".join(new_gen).rstrip() + '\n\n'
+            if line.strip() != '' and get_indent(line) < indent:
+                break
             new_gen.append(line)
         return "\n".join(new_gen).rstrip() + '\n\n'
 
     @torch.no_grad()
     def generate(self, tasks: tp.List[Task]) -> tp.List[tp.List[str]]:
         res = []
-        for i, task in tqdm(enumerate(tasks)):
-            tokens = self._prepare_tokens(task)
+        for i, task in tqdm(enumerate(tasks), desc='Generating (main process)', total=len(tasks)):
+            tokens = self._prepare_tokens(task).to(self.device)
             if i == 0:
                 logger.debug(f"\nTokens: {tokens[:, :5]} ... {tokens[:, -5:]}\n")
-            generated_tokens = self.model.generate(tokens, **self.generation_params)
+            generated_tokens = self.model.generate(tokens, attention_mask=torch.ones_like(tokens),**self.generation_params)
             generations = self.tokenizer.batch_decode(generated_tokens[:, tokens.shape[1]:], skip_special_tokens=True)
+            gt_indent = get_indent(task.gt)
             if i % 1 == 0:
-                logger.debug(f"Generation for task {i}:\n{self._postprocess(generations[0])}")
-            res.append([self._postprocess(t) for t in generations])
-            self.count_inferenced_tokens.append([len(t) for t in tokens])
+                logger.debug(f"Generation for task {i}:\n{self._postprocess(generations[0], gt_indent)}")
+            res.append([self._postprocess(t, gt_indent) for t in generations])
         return res
 
 
@@ -155,8 +146,7 @@ class LMGenerator(InfillGenerator):
         left_context_str, _ = self.context_parser.get_left_and_right_context(task)
         logger.info("\n" + "\n".join(left_context_str.split('\n')[-20:]))
         left_tokens = self.tokenizer.encode(
-            left_context_str, return_tensors="pt", add_special_tokens=False).to(self.device) # ['input_ids']
-        self.count_possible_tokens.append(left_tokens.shape[1])
+            left_context_str, return_tensors="pt", add_special_tokens=False) # ['input_ids']
         if self.max_context_length and left_tokens.shape[1] > self.max_context_length:
             left_tokens = left_tokens[:, -self.max_context_length:]
         tokens = torch.cat([self.lm_prefix_tokens, left_tokens, self.lm_suffix_tokens], dim=-1).type(torch.long)
