@@ -1,13 +1,15 @@
 # RealCode_eval
-**RealCode_eval** is a benchmark to perform execution-based evaluation of LLM code generation for real github repositories.
-# Data
-**RealCode** is a dataset of 219 Python functions\* from 22 github repositories published between June and August on 2023. All these functions are covered with tests in their respective repositories. \
-\* our term "function" also includes methods in classes
+**RealCode_eval** is a benchmark to perform **execution-based** evaluation of LLM code generation capabilities in **real Github repositories**. The model-generated code is evaluated by running tests in respective repositories.
+
+**RealCode v3** includes two indenpendent benchmarks: **FG (Function Generation)** and **SG (Scope Generation)**. Each benchmark has **1000 tasks** built from **154 Python GitHub repositories**. 
+
+To avoid data contamination for popular Code LLMs we only use repositories created in 2024. 
+
+## Realcode v3 Function Generation
+Each task of Realcode v3 FG requires the model to generate the body of a function (or of a class method), based on a function signature, a **docstring** and the rest of source code file.
 
 <details>
-<summary> 
-
-### Example of a task
+<summary> Example
 </summary>
 
 ```python
@@ -91,167 +93,122 @@ class AutoencoderExtractor(BaseEstimator, TransformerMixin):
 ```
 </details>
 
+## Realcode v3 Scope Generation
+Each task of Realcode v3 SG requires the model to generate an arbitrary block of code (a body of a function, a for-loop, an if-statement, etc.), based on the rest of the source code file. Unlike FG task, the docstring (or any other description of the code in natural language) of the code may not be provided.
 
+<details>
+<summary> 
+Example
+</summary>
 
-# Evaluation benchmark
+```python
+import click
+from geekbot_cli.api_client import APIClient
+from geekbot_cli.config_manager import ConfigManager
+from geekbot_cli.cli import CLI
+import sys
 
-The task for a model in **RealCode_eval** is to write the body of a function that is declared in a file within one of the repositories. The benchmark supplies the model with the remainder of the file or even the entire repository. If the number of tests passed with the generated body matches the precomputed number of passed tests for the repository, the generation is deemed correct. The Pass@k metric (from [Codex paper](https://arxiv.org/abs/2107.03374)) is employed for evaluation.
+@click.command()
+@click.option('--clear-api-key', is_flag=True, help='Removes the saved API key from keyring')
+def main(clear_api_key):
+    """
+    Entry point for the CLI that can now handle `--clear-api-key` to remove the saved API key.
+    """
+    config_manager = ConfigManager()
+    if clear_api_key:
+        if click.confirm('Are you sure you want to remove the API key?'):
+# >>> THIS NEEDS TO BE GENERATED >>>>
+            config_manager.delete_api_key()
+            click.echo("API key has been removed.")
+# <<<< <<<<
+        else:
+            click.echo("Operation cancelled.")
+    else:
+        # Normal CLI operation
+        try:
+            api_client = APIClient()
+            cli = CLI(api_client, config_manager)
+            cli.start()
+        except Exception as e:
+            click.echo(f"Error: {e}")
+            sys.exit(1)
 
-Every repository in RealCode has dependencies and, as a result, necessitates properly configured environments. We utilize Conda to create distinct environments for each repository.
+if __name__ == '__main__':
+    main()
+```
+</details>
 
-
-# Evaluation of public code LMs
-> [!NOTE]
-> These results were obtained on the pre-release version of the dataset, which contained two more functions (221 instead of 219)
-
-## LM mode, left context only, 1024 tokens
-| +model    | size    |   Pass@1 |
-|:----------|:--------|---------:|
-| starcoder | 1b      | 0.3873  |
-| starcoder | 7b      | 0.4814 |
-| codellama | 7b      | 0.4760 |
-| codellama | 13b     | 0.4841 |
-| codellama | 34b     | 0.4932 |
-| phi1      | 1b      | 0.3529 |
-| mistral   | 7b     | 0.4208 |
-| deepseek-coder  | 1.3b    | 0.4144  |
-| deepseek-coder  | 5.7bmqa | 0.4669 |
-| deepseek-coder  | 6.7b    | 0.4914 |
-| deepseek-coder  | 33b     | 0.4932 |
-
-## Infill mode, 512 tokens left context, 512 tokens right context
-| +model       | size         |   Pass@1 |
-|:-------------|:-------------|---------:|
-| codellama    | 7b           | 0.4941 |
-| codellama    | 13b          | 0.5339 |
-| deepseek-coder     | 1.3b         | 0.3113 |
-| deepseek-coder     | 5.7bmqa      | 0.5330 |
-| deepseek-coder     | 6.7b         | 0.4832 |
-| deepseek-coder     | 33b          | 0.5484 |
-| starcoder    | 1b           | 0.4506 |
-| starcoder    | 7b           | 0.5149 |
-| starcoder    | 15b | 0.5248 |
-
-> [!NOTE]
-> If an "oracle" takes max Pass@1 for each function from the configurations presented in LM and Infill tables, he would score Pass@1=0.7085
-## Repository-level mode\*, 15k tokens in context, 13.5k in left context for infill
-| model    | generator_mode   |   size |   Pass@1 |
-|:---------|:-----------------|:-------|---------:|
-| deepseek | lm               |      1.3b | 0.5438 | 
-| deepseek | lm               |      5.7bmqa | 0.5601 |
-| deepseek | infill           |      5.7bmqa | 0.5891 |
-| deepseek | lm               |      6.7b | 0.5954 |
-| deepseek | infill           |      6.7b | 0.5809 |
-
-\* both the files imported by current file and the files that import current file are added to the left context
-
+## Evaluation
+We use the following evaluation procedure for each task and the generated code snippet:
+1. The generated code snippet is placed in the appropriate position of the source code file. 
+2. The entire repository gets copied to ./workdir, including the file from Step 1.
+3. All tests are executed in the copied repository.
+4. If the number of passed tests differs from the prerecorded number of the passed tests in the repository, we consider the generated code incorrect. If the two numbers are equal, the code is correct. 
 
 # Getting started
-Prerequisites:
-* Linux
-* Conda 
+Every repository in RealCode has dependencies and, as a result, necessitates properly configured environments. We utilize Conda to create individual environments for each repository.
 
-1. Install requirements in your main environment
+**1.** Install requirements in your main environment
 ```python
 pip install -r requirements.txt
+pip install flash-attn --no-build-isolation
 ```
 
-2. Download repositories and dataset
-```bash
+**2.** Download repositories and meta files
+```
 wget https://zenodo.org/records/13378983/files/realcode_v3_repos_upd.tar.gz
 tar -xvf ../RealCode_eval/realcode_v3_repos_upd.tar.gz -C data
 ```
-3. Build conda environments for each repository
+Expected file structure:
 ```
+data/realcode_v3/realcode_v3_SG.json
+data/realcode_v3/realcode_v3_FG.json
+data/realcode_v3/*Repository names*
+```
+
+**3.** Build environments for each repository in the benchmark (takes about an hour)
+```bash
 cd prepare_data
 python run.py
 cd ..
 ```
 
-4. Check installation
+**4.** Check installation **(IMPORTANT!)**
 ```bash
-pytest tests
+pytest tests/test_evaluator.py
 ```
-
 > [!NOTE]
 > Number of passed tests in the repositories may vary depending on your system. If this test fails on your system feel free to open an issue. We need your feedback to create a more stable version of the benchmark.
 
-5. Run the evaluation of your model (see **config/config.yaml** for details). E.g. for [codeparrot-small](https://huggingface.co/codeparrot/codeparrot-small) (Pass@1 should be 0.16):
+**5.** Run the evaluation of your model (see config/config.yaml for details). E.g. for [codeparrot-small](https://huggingface.co/codeparrot/codeparrot-small):
 ```bash
 CUDA_VISIBLE_DEVICES=0 python main.py +model=codeparrot generation_params.max_new_tokens=512 max_context_length=500
 ```
-
 > [!WARNING]
-> **Generated code is executed without any isolation! Use at your own risk!**
-
-6. The evaluation results will be saved at ```./results/```
+> **Generated code is executed without any isolation in the benchmark! The repositories themselves are checked to be safe, but the generated code may not!**
 
 # Examples
-
-
-* Run codellama-7b with left context only, 1024 tokens in prompt
+* Run deepseek-ai/deepseek-coder-1.3b-base with left context only, 1024 tokens in prompt:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python main.py +model=codellama size=7b max_context_length=1024
+CUDA_VISIBLE_DEVICES=0 python main.py +model=deepseek size=1.3b max_context_length=1024
 ``` 
-* Run starcoder-3b with left and right context, 512 tokens in left context, 512 tokens in right context
+* Run deepseek-ai/deepseek-coder-1.3b-base with **left and right context**, 1024 tokens in prompt:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python main.py +model=starcoder size=3b generator_mode=infill max_context_length=1024
+CUDA_VISIBLE_DEVICES=0 python main.py +model=deepseek size=1.3b max_context_length=1024
 ``` 
-* Run starcoder-3b with left and right context, 750 tokens in left context, 250 tokens in right context
+* (Recommended mode) Run deepseek-ai/deepseek-coder-1.3b-base with left and right context, 1024 tokens in prompt, **3:1 left to right context ratio**:
 ```bash
-CUDA_VISIBLE_DEVICES=0 python main.py +model=starcoder size=3b max_context_length=1000 left_context_ratio=3
+CUDA_VISIBLE_DEVICES=0 python main.py +model=deepseek size=1.3b max_context_length=1024 left_context_ratio=3
 ``` 
-* Run model from local checkpoint at ```/downloaded/checkpoints/my_ckpt```
-```
-CUDA_VISIBLE_DEVICES=0 python main.py \
-    +model=local model_base_path=/downloaded/checkpoints model_short_name=my_ckpt max_context_length=1024
-```
-* Run repository level code infilling with deepseekcoder-1.3b:
-```
-CUDA_VISIBLE_DEVICES=0 python main.py \
-    +model=deepseek size=1.3b +context_parser=import_copy \
-    generator_mode=infill max_context_length=14000 left_context_ratio=19
-```
-* Use hydra multirun for consecutive runs:
-```
-CUDA_VISIBLE_DEVICES=0 python main.py \
-    +model=codellama size=7b,13b generator_mode=lm,infill max_context_length=2048 --multirun
-```
-* Parallel generation across 8 GPUs
-```
-accelerate launch --num-processes 8 main.py +model=starcoder size=3b generator_mode=infill max_context_length=1024
-```
-See ```config/config.yaml``` for other options
+* You can evalute your awesome model from a local HuggingFace checkpoint:
+```bash
+CUDA_VISIBLE_DEVICES=0 python main.py +model=local model_path=*path_to_HF_checkpoint* model_name=*my_awesome_model* max_context_length=1024
+``` 
+> [!NOTE]
+> You may need to edit the config/model/local.yaml with FIM tokens for your model
 
-# Notes
-* Around 60% of the used repositories are related to the field of AI/LLMs/ML. We did not perform any specific topic-based filtering, it comes from the topic distribution of the github python repositories in summer 2023
-* The code in RealCode repositories was not be seen during pretraining of starcoder or codellama as these models were trained before the summer 2023. Deepseek-coder may have seen this code in pretraining.
-* Repositories are rolled back to a specific commit during data preparation
-* Not all the tests are passed in the repositories. We consider a generation to be correct if it passes the same number of tests, as the ground truth body of a function
-* We use ```device_map='auto'```, if you wish to use specific GPUs set ```CUDA_VISIBLE_DEVICES```, as in the examples
-
-If you find RealCode_eval useful please consider giving a star to the repositories used for evaluation: \
-https://github.com/Jakob-98/openai-functools \
-https://github.com/biobootloader/mentat \
-https://github.com/causalens/cai-causal-graph \
-https://github.com/modelscope/modelscope-agent \
-https://github.com/simonmesmith/agentflow \
-https://github.com/defog-ai/sql-eval \
-https://github.com/Wyvern-AI/wyvern \
-https://github.com/danielbeach/tinytimmy \
-https://github.com/a-r-r-o-w/stablefused \
-https://github.com/langchain-ai/permchain \
-https://github.com/NullPyDev/beholder \
-https://github.com/opencopilotdev/opencopilot \
-https://github.com/AgentOps-AI/agentops \
-https://github.com/TengHu/ActionWeaver \
-https://github.com/fynnfluegge/doc-comments.ai \
-https://github.com/Tinny-Robot/DimSense \
-https://github.com/mljar/plotai \
-https://github.com/juliendenize/eztorch \
-https://github.com/yihong0618/epubhv \
-https://github.com/simonw/llm-cluster \
-https://github.com/Pennyw0rth/NetExec \
-https://github.com/Vaultexe/server
-
+* The model is inferenced with device_map='auto' by default. If you instead wish to distribute tasks between several GPUs, you can use accelerate:
+```bash
+CUDA_VISIBLE_DEVICES=0,1 accelerate launch --num_processes 2 main.py +model=deepseek size=1.3b max_context_length=1024
+``` 
 

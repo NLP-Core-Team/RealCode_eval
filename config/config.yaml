@@ -1,16 +1,18 @@
 defaults:
     - task: SG
     
-job:
+hydra:
+  job:
     config:
-        override_dirname:
-            exclude_keys: 
-                - dataset_root
-                - dataset_meta_file
-                - generations_save_path
-                - working_dir
-                - metrics_save_path
-                - use_cached_generation
+      override_dirname:
+        exclude_keys:
+            - model_path
+            - dataset_root
+            - dataset_meta_file
+            - generations_save_path
+            - working_dir
+            - metrics_save_path
+            - use_cached_generation
                 
 do_eval: True
 do_generation: True

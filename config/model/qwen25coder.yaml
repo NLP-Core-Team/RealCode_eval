@@ -1,0 +1,13 @@
+# @package _global_
+
+size: "1.5B"
+model_path: Qwen/${model_short_name}
+model_short_name: Qwen2.5-Coder-${size}
+lm_prefix_tokens: ""
+lm_suffix_tokens: ""
+prefix_tokens: "<|fim_prefix|>"
+middle_tokens: "<|fim_suffix|>"
+suffix_tokens: "<|fim_middle|>"
+max_context_length: 7500
+model_kwargs:
+  use_flash_attention_2: True
