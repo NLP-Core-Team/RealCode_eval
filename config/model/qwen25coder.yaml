@@ -9,5 +9,5 @@ prefix_tokens: "<|fim_prefix|>"
 middle_tokens: "<|fim_suffix|>"
 suffix_tokens: "<|fim_middle|>"
 max_context_length: 7500
-model_kwargs:
-  use_flash_attention_2: True
+model_kwargs: 
+  attn_implementation: flash_attention_2

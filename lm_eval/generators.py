@@ -88,7 +88,7 @@ class InfillGenerator:
 
     def _prepare_tokens(self, task: Task) -> torch.Tensor:
         left_context_str, right_context_str = self.context_parser.get_left_and_right_context(task)
-        logger.info("\n" + "\n".join(left_context_str.split('\n')[-20:]))
+        logger.info("Task\n" + "\n".join(left_context_str.split('\n')[-20:]))
         left_tokens = self.tokenizer.encode(
             left_context_str, return_tensors="pt", add_special_tokens=False, max_length=self.max_context_length)# ['input_ids']
         right_tokens = self.tokenizer.encode(
@@ -104,6 +104,12 @@ class InfillGenerator:
     def _postprocess(self, generation: str, indent: int):
         new_gen = []
         for i, line in enumerate(generation.split('\n')):
+            line = line.replace("<|fim_pad|>", "")
+            if i == 0:
+                print("/".join(line))
+                print(len(line) - len(line.lstrip()))
+            if i == 0 and (len(line) - len(line.lstrip())) % 4 == 3:
+                line = " " + line
             if line.strip() != '' and get_indent(line) < indent:
                 break
             new_gen.append(line)
@@ -116,11 +122,12 @@ class InfillGenerator:
             tokens = self._prepare_tokens(task).to(self.device)
             if i == 0:
                 logger.debug(f"\nTokens: {tokens[:, :5]} ... {tokens[:, -5:]}\n")
-            generated_tokens = self.model.generate(tokens, attention_mask=torch.ones_like(tokens),**self.generation_params)
+            generated_tokens = self.model.generate(tokens, **self.generation_params)
             generations = self.tokenizer.batch_decode(generated_tokens[:, tokens.shape[1]:], skip_special_tokens=True)
             gt_indent = get_indent(task.gt)
             if i % 1 == 0:
-                logger.debug(f"Generation for task {i}:\n{self._postprocess(generations[0], gt_indent)}")
+                logger.info(f"Raw Generation for task {i}:\n{generations[0]}")
+                logger.info(f"Generation for task {i}:\n{self._postprocess(generations[0], gt_indent)}")
             res.append([self._postprocess(t, gt_indent) for t in generations])
         return res
 
